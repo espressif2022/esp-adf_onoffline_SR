@@ -134,6 +134,7 @@ static esp_err_t audio_recorder_notify_events(audio_recorder_t *recorder, int ev
 static inline esp_err_t audio_recorder_update_state_2_user(audio_recorder_t *recorder, int evt)
 {
     AUDIO_NULL_CHECK(TAG, recorder, return ESP_FAIL);
+    ESP_LOGI(TAG, "USER CMD [evt %d]", evt);
     recorder->event_cb(evt, recorder->user_data);
     return ESP_OK;
 }
@@ -216,6 +217,7 @@ static esp_err_t audio_recorder_afe_monitor(recorder_sr_result_t result, void *u
 static esp_err_t audio_recorder_mn_monitor(recorder_sr_result_t result, void *user_ctx)
 {
     if (result >= 0) {
+        ESP_LOGI(TAG, "result : %d", result);
         return audio_recorder_send_msg(user_ctx, RECORDER_CMD_MN_DECT, (void *)result, 0);
     } else {
         return ESP_FAIL;
@@ -412,6 +414,7 @@ static void audio_recorder_task(void *parameters)
                 }
                 break;
             case RECORDER_CMD_MN_DECT:
+                ESP_LOGI(TAG, "RECORDER_CMD_MN_DECT : %d", (int)msg.data);
                 audio_recorder_update_state_2_user(recorder, (int)msg.data);
                 break;
             default:

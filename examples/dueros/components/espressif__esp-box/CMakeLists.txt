@@ -1,0 +1,8 @@
+idf_component_register(
+    SRCS "esp-box.c"
+    INCLUDE_DIRS "include"
+    PRIV_INCLUDE_DIRS "priv_include"
+    REQUIRES driver spiffs
+    #PRIV_REQUIRES esp_timer esp_lcd esp_lcd_touch lvgl esp_lcd_touch_tt21100 esp_lvgl_port
+    REQUIRES esp_timer esp_lcd esp_lcd_touch lvgl esp_lcd_touch_tt21100 esp_lvgl_port
+)

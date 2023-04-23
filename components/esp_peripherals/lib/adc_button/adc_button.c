@@ -418,7 +418,7 @@ void adc_btn_init(void *user_data, adc_button_callback cb, adc_btn_list *head, a
                         "button_task", button_task,
                         (void *)tag,
                         task_cfg->task_stack,
-                        task_cfg->task_prio,
+                        /*task_cfg->task_prio*/4,
                         task_cfg->ext_stack,
                         task_cfg->task_core);
 }

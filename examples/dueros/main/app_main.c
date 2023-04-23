@@ -30,12 +30,22 @@
 #include "dueros_app.h"
 
 #include "audio_idf_version.h"
+#include "audio_tone_uri.h"
+
+#include "esp_log.h"
+#include "esp_check.h"
+#include "bsp/esp-bsp.h"
+
+#include "lv_example_pub.h"
+#include "lv_example_image.h"
 
 #if (ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(4, 1, 0))
 #include "esp_netif.h"
 #else
 #include "tcpip_adapter.h"
 #endif
+
+static const char *TAG = "main";
 
 void app_main(void)
 {
@@ -46,10 +56,38 @@ void app_main(void)
         ESP_ERROR_CHECK(nvs_flash_erase());
         err = nvs_flash_init();
     }
+    
+    bsp_display_start();
+    
+    ESP_LOGI(TAG, "Display LVGL demo");
+    bsp_display_backlight_on();
+    bsp_display_lock(0);
+    lv_create_home(&boot_Layer);
+    lv_create_clock(NULL, TIME_ENTER_CLOCK_2MIN);
+    bsp_display_unlock();
+
 #if (ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(4, 1, 0))
     ESP_ERROR_CHECK(esp_netif_init());
 #else
     tcpip_adapter_init();
 #endif
     duer_app_init();
+
+    static char buffer[128];    /* Make sure buffer is enough for `sprintf` */
+    while (1) {
+        // audio_sys_get_real_time_stats();
+
+        sprintf(buffer, "   Biggest /     Free /    Total\n"
+                "\t  SRAM : [%8d / %8d / %8d]\n"
+                "\t PSRAM : [%8d / %8d / %8d]",
+                heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL),
+                heap_caps_get_free_size(MALLOC_CAP_INTERNAL),
+                heap_caps_get_total_size(MALLOC_CAP_INTERNAL),
+                heap_caps_get_largest_free_block(MALLOC_CAP_SPIRAM),
+                heap_caps_get_free_size(MALLOC_CAP_SPIRAM),
+                heap_caps_get_total_size(MALLOC_CAP_SPIRAM));
+        printf("%s\r\n", buffer);
+
+        vTaskDelay(pdMS_TO_TICKS(5000));
+    }
 }

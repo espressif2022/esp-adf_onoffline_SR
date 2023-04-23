@@ -41,6 +41,7 @@
 #include "audio_pipeline.h"
 #include "recorder_sr.h"
 
+#include "tone_stream.h"
 #include "fatfs_stream.h"
 #include "raw_stream.h"
 #include "i2s_stream.h"
@@ -141,10 +142,14 @@ void *duer_audio_setup_player(void)
     xTaskCreate(esp_audio_state_task, "player_task", 3 * 1024, cfg.evt_que, 1, NULL);
 
     // Create readers and add to esp_audio
-    fatfs_stream_cfg_t fs_reader = FATFS_STREAM_CFG_DEFAULT();
-    fs_reader.type = AUDIO_STREAM_READER;
+    // fatfs_stream_cfg_t fs_reader = FATFS_STREAM_CFG_DEFAULT();
+    // fs_reader.type = AUDIO_STREAM_READER;
+    // esp_audio_input_stream_add(player, fatfs_stream_init(&fs_reader));
 
-    esp_audio_input_stream_add(player, fatfs_stream_init(&fs_reader));
+    tone_stream_cfg_t tone_cfg = TONE_STREAM_CFG_DEFAULT();
+    tone_cfg.type = AUDIO_STREAM_READER;
+    esp_audio_input_stream_add(player, tone_stream_init(&tone_cfg));
+
     http_stream_cfg_t http_cfg = HTTP_STREAM_CFG_DEFAULT();
     http_cfg.event_handle = _http_stream_event_handle;
     http_cfg.type = AUDIO_STREAM_READER;
@@ -351,13 +356,18 @@ void duer_dcs_get_speaker_state(int *volume, duer_bool *is_mute)
     }
 }
 
+extern bool local_triger;
 void duer_dcs_speak_handler(const char *url)
 {
-    ESP_LOGI(TAG, "Playing speak: %s", url);
-    esp_audio_play(player, AUDIO_CODEC_TYPE_DECODER, url, 0);
-    xSemaphoreTake(s_mutex, portMAX_DELAY);
-    duer_playing_type = DUER_AUDIO_TYPE_SPEECH;
-    xSemaphoreGive(s_mutex);
+    ESP_LOGI(TAG, "[%d], Playing speak: %s", local_triger, url);
+    if(false == local_triger){
+        esp_audio_play(player, AUDIO_CODEC_TYPE_DECODER, url, 0);
+        xSemaphoreTake(s_mutex, portMAX_DELAY);
+        duer_playing_type = DUER_AUDIO_TYPE_SPEECH;
+        xSemaphoreGive(s_mutex);
+    }else{
+        local_triger = false;
+    }
 }
 
 void duer_dcs_audio_play_handler(const duer_dcs_audio_info_t *audio_info)

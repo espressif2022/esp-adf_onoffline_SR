@@ -59,6 +59,10 @@
 #include "smart_config.h"
 #include "periph_adc_button.h"
 #include "algorithm_stream.h"
+#include "tone_stream.h"
+
+#include "ui_sr.h"
+#include "audio_tone_uri.h"
 
 #if (ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(4, 0, 0))
 #include "driver/touch_pad.h"
@@ -101,10 +105,29 @@ static void voice_read_task(void *args)
     vTaskDelete(NULL);
 }
 
+bool local_triger = false;
+static SemaphoreHandle_t lvgl_mux;
+
+bool cb_port_lock(uint32_t timeout_ms)
+{
+    assert(lvgl_mux && "lvgl_port_init must be called first");
+
+    const TickType_t timeout_ticks = (timeout_ms == 0) ? portMAX_DELAY : pdMS_TO_TICKS(timeout_ms);
+    return xSemaphoreTakeRecursive(lvgl_mux, timeout_ticks) == pdTRUE;
+}
+
+void cb_port_unlock(void)
+{
+    assert(lvgl_mux && "lvgl_port_init must be called first");
+    xSemaphoreGiveRecursive(lvgl_mux);
+}
+
 static esp_err_t rec_engine_cb(audio_rec_evt_t type, void *user_data)
 {
+    cb_port_lock(0);
+
     if (AUDIO_REC_WAKEUP_START == type) {
-        ESP_LOGI(TAG, "rec_engine_cb - AUDIO_REC_WAKEUP_START");
+        ESP_LOGW(TAG, "rec_engine_cb - AUDIO_REC_WAKEUP_START");
         if (dueros_service_state_get() == SERVICE_STATE_RUNNING) {
             dueros_voice_cancel(duer_serv_handle);
         }
@@ -112,27 +135,46 @@ static esp_err_t rec_engine_cb(audio_rec_evt_t type, void *user_data)
             duer_audio_wrapper_pause();
         }
         display_service_set_pattern(disp_serv, DISPLAY_PATTERN_TURN_ON, 0);
-        ESP_LOGI(TAG, "rec_engine_cb - Play tone");
-        duer_dcs_audio_sync_play_tone("file://sdcard/dingding.wav");
+
+        duer_audio_wrapper_pause();
+        ESP_LOGI(TAG, "rec_engine_cb - Play tone:[%s]", tone_uri[TONE_TYPE_DINGDONG]);
+        duer_dcs_audio_sync_play_tone(tone_uri[TONE_TYPE_DINGDONG]);
+
+        sr_anim_start();
     } else if (AUDIO_REC_VAD_START == type) {
-        ESP_LOGI(TAG, "rec_engine_cb - AUDIO_REC_VAD_START");
+        ESP_LOGW(TAG, "rec_engine_cb - AUDIO_REC_VAD_START");
         audio_service_start(duer_serv_handle);
         xEventGroupSetBits(duer_evt, DUER_REC_READING);
+        
+        sr_anim_start();
     } else if (AUDIO_REC_VAD_END == type) {
         xEventGroupClearBits(duer_evt, DUER_REC_READING);
         if (dueros_service_state_get() == SERVICE_STATE_RUNNING) {
             audio_service_stop(duer_serv_handle);
         }
-        ESP_LOGI(TAG, "rec_engine_cb - AUDIO_REC_VAD_STOP, state:%d", dueros_service_state_get());
+        ESP_LOGW(TAG, "rec_engine_cb - AUDIO_REC_VAD_STOP, state:%d", dueros_service_state_get());
+        sr_anim_stop();
     } else if (AUDIO_REC_WAKEUP_END == type) {
         if (dueros_service_state_get() == SERVICE_STATE_RUNNING) {
             audio_service_stop(duer_serv_handle);
         }
         display_service_set_pattern(disp_serv, DISPLAY_PATTERN_TURN_OFF, 0);
-        ESP_LOGI(TAG, "rec_engine_cb - AUDIO_REC_WAKEUP_END");
+        ESP_LOGW(TAG, "rec_engine_cb - AUDIO_REC_WAKEUP_END");
+    } else if (AUDIO_REC_COMMAND_DECT <= type) {
+        // if (dueros_service_state_get() == SERVICE_STATE_RUNNING) {
+        //     audio_service_stop(duer_serv_handle);
+        // }
+        // display_service_set_pattern(disp_serv, DISPLAY_PATTERN_TURN_OFF, 0);
+        ESP_LOGW(TAG, "rec_engine_cb AUDIO_REC_COMMAND_DECT :[%s], type:[%d], cmd:[%d]", tone_uri[TONE_TYPE_HAODE], type, (int)user_data);
+        duer_audio_wrapper_pause();
+        local_triger = true;
+        sr_anim_set_text(sr_cmd_list[type]);
+        sr_anim_stop();
+        duer_dcs_audio_sync_play_tone(tone_uri[TONE_TYPE_HAODE]);
     } else {
 
     }
+    cb_port_unlock();
 
     return ESP_OK;
 }
@@ -323,6 +365,11 @@ void duer_app_init(void)
 
     ESP_LOGI(TAG, "ADF version is %s", ADF_VER);
 
+    lvgl_mux = xSemaphoreCreateRecursiveMutex();
+    if(NULL == lvgl_mux){
+        ESP_LOGI(TAG, "Create LVGL mutex fail!");
+    }
+
     esp_periph_config_t periph_cfg = DEFAULT_ESP_PERIPH_SET_CONFIG();
     esp_periph_set_handle_t set = esp_periph_set_init(&periph_cfg);
     if (set != NULL) {
@@ -330,7 +377,7 @@ void duer_app_init(void)
     }
     audio_board_init();
     audio_board_key_init(set);
-    audio_board_sdcard_init(set, SD_MODE_1_LINE);
+    // audio_board_sdcard_init(set, SD_MODE_1_LINE);
 #ifdef FUNC_SYS_LEN_EN
     disp_serv = audio_board_led_init();
 #endif

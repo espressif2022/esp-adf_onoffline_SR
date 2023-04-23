@@ -27,7 +27,7 @@
 #define DUER_STRING_OUTPUT(_x)  (((_x) == NULL) ? ("NULL") : (_x))
 
 #ifndef DUER_DEBUG_LEVEL
-#define DUER_DEBUG_LEVEL 3
+#define DUER_DEBUG_LEVEL 0
 #endif
 
 #ifdef DUER_DEBUG_LEVEL
